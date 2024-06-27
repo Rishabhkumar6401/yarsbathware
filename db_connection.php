@@ -1,7 +1,7 @@
 <?php
 // Database credentials
 $host = "localhost"; // Change this to your host if it's different
-$dbname = "gozoomdb"; // Change this to your database name
+$dbname = "yars"; // Change this to your database name
 $username = "root"; // Change this to your database username
 $password = ""; // Change this to your database password
 
