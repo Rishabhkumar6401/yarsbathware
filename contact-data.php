@@ -2,8 +2,21 @@
 // Include database connection
 require 'db_connection.php';
 
+// Handle delete request
+if (isset($_GET['delete_id'])) {
+    $delete_id = $_GET['delete_id'];
+    $sql_delete = "DELETE FROM contact_form_data WHERE id = :id";
+    $stmt_delete = $pdo->prepare($sql_delete);
+    $stmt_delete->bindParam(':id', $delete_id, PDO::PARAM_INT);
+    $stmt_delete->execute();
+
+    // Redirect to the same page to refresh the data
+    header("Location: contact-data.php");
+    exit();
+}
+
 // Retrieve contact form data from the database
-$sql = "SELECT id, name, contact_number FROM contact_form_data";
+$sql = "SELECT id, name, contact_number, created_at FROM contact_form_data ORDER BY id DESC";
 $stmt = $pdo->query($sql);
 $contactData = $stmt->fetchAll(PDO::FETCH_ASSOC);
 ?>
@@ -25,16 +38,21 @@ $contactData = $stmt->fetchAll(PDO::FETCH_ASSOC);
             <li class="list-group-item d-flex justify-content-between align-items-center">
                 <div>
                     <strong>
-                    <span>Name: <?php echo $data['name']; ?></span>
-                    <span class="ml-3">Phone: <?php echo $data['contact_number']; ?></span>
+                        <span>Name: <?php echo $data['name']; ?></span>
+                        <span class="ml-3">Phone: <?php echo $data['contact_number']; ?></span>
+                        <span class="ml-3">Date: <?php echo $data['created_at']; ?></span>
                     </strong>
                 </div>
-                <a href="view-contact.php?id=<?php echo $data['id']; ?>" class="btn btn-primary">View</a>
+                <div>
+                    <a href="view-contact.php?id=<?php echo $data['id']; ?>" class="btn btn-primary">View</a>
+                    <a href="contact-data.php?delete_id=<?php echo $data['id']; ?>" class="btn btn-danger"
+                       onclick="return confirm('Are you sure you want to delete this contact?');">Delete</a>
+                </div>
             </li>
         <?php endforeach; ?>
     </ul>
     <div class="text-center mt-3 mb-3">
-    <a href="dashboard.php" class="btn btn-primary">Back</a>
+        <a href="dashboard.php" class="btn btn-primary">Back</a>
     </div>
 </div>
 

@@ -8,10 +8,6 @@ if (!isset($_SESSION['username'])) {
 // Include database connection file
 include_once 'db_connection.php';
 
-// Define variables and initialize with empty values
-$product_data = array_fill(0, 5, array('product_name' => '', 'product_code' => '', 'category_id' => '', 'best_seller' => '', 'product_image' => ''));
-$product_name_err = $product_code_err = $category_id_err = '';
-
 // Fetch categories from the database
 $sql_categories = "SELECT category_id, category_name FROM categories";
 $result_categories = $pdo->query($sql_categories);
@@ -55,43 +51,26 @@ function compressImage($inputFilePath, $outputFilePath, $quality = 75) {
 
 // Process form data when form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    // Validate and insert each product
-    for ($i = 0; $i < 5; $i++) {
+    $product_data = [];
+    foreach ($_POST['products'] as $i => $product) {
         // Validate product name
-        if (empty(trim($_POST["product_name_$i"]))) {
-            $product_name_err = "Please enter product name.";
-        } else {
-            $product_data[$i]['product_name'] = trim($_POST["product_name_$i"]);
-        }
-
-        // Validate product code
-        if (empty(trim($_POST["product_code_$i"]))) {
-            $product_code_err = "Please enter product code.";
-        } else {
-            $product_data[$i]['product_code'] = trim($_POST["product_code_$i"]);
-        }
-
-        // Validate category
-        if (empty(trim($_POST["category_id_$i"]))) {
-            $category_id_err = "Please select a category.";
-        } else {
-            $product_data[$i]['category_id'] = trim($_POST["category_id_$i"]);
-        }
-
-        // Handle best seller checkbox
-        $product_data[$i]['best_seller'] = isset($_POST["best_seller_$i"]) ? 1 : 0;
+        $product_name = trim($product['product_name']);
+        $product_code = trim($product['product_code']);
+        $category_id = trim($product['category_id']);
+        $best_seller = isset($product['best_seller']) ? 1 : 0;
 
         // Handle product image upload
-        if ($_FILES["product_image_$i"]["size"] > 0) {
+        $product_image = '';
+        if ($_FILES['products']['size'][$i]['product_image'] > 0) {
             $target_dir = "uploads/";
-            $file_extension = pathinfo($_FILES["product_image_$i"]["name"], PATHINFO_EXTENSION);
+            $file_extension = pathinfo($_FILES['products']['name'][$i]['product_image'], PATHINFO_EXTENSION);
             $random_number = rand(1000, 9999);
-            $product_data[$i]['product_image'] = $random_number . '_' . basename($_FILES["product_image_$i"]["name"]);
-            $target_file = $target_dir . $product_data[$i]['product_image'];
-            move_uploaded_file($_FILES["product_image_$i"]["tmp_name"], $target_file);
+            $product_image = $random_number . '_' . basename($_FILES['products']['name'][$i]['product_image']);
+            $target_file = $target_dir . $product_image;
+            move_uploaded_file($_FILES['products']['tmp_name'][$i]['product_image'], $target_file);
 
             // Compress the image
-            $compressed_file = $target_dir . 'compressed_' . $product_data[$i]['product_image'];
+            $compressed_file = $target_dir . 'compressed_' . $product_image;
             if (compressImage($target_file, $compressed_file)) {
                 // Remove the original uploaded image
                 unlink($target_file);
@@ -99,24 +78,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 rename($compressed_file, $target_file);
             }
         }
-    }
 
-    // Insert product data into the database
-    foreach ($product_data as $product) {
-        // Prepare an insert statement
-        $sql = "INSERT INTO products (category_id, product_name, product_code, best_seller, product_image) VALUES (:category_id, :product_name, :product_code, :best_seller, :product_image)";
-
-        // Prepare the SQL statement
+        // Insert product data into the database
+        $sql = "INSERT INTO products (category_id, product_name, product_code, best_seller, product_image) 
+                VALUES (:category_id, :product_name, :product_code, :best_seller, :product_image)";
         $stmt = $pdo->prepare($sql);
-
-        // Bind parameters
-        $stmt->bindParam(':category_id', $product['category_id']);
-        $stmt->bindParam(':product_name', $product['product_name']);
-        $stmt->bindParam(':product_code', $product['product_code']);
-        $stmt->bindParam(':best_seller', $product['best_seller']);
-        $stmt->bindParam(':product_image', $product['product_image']);
-
-        // Attempt to execute the prepared statement
+        $stmt->bindParam(':category_id', $category_id);
+        $stmt->bindParam(':product_name', $product_name);
+        $stmt->bindParam(':product_code', $product_code);
+        $stmt->bindParam(':best_seller', $best_seller);
+        $stmt->bindParam(':product_image', $product_image);
         $stmt->execute();
     }
 
@@ -134,6 +105,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <title>Bulk Add Products</title>
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        .remove-button {
+            margin-top: 30px;
+        }
+    </style>
 </head>
 
 <body>
@@ -148,46 +124,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                         <h2 class="text-center">Bulk Add Products</h2>
                     </div>
                     <div class="card-body">
-                        <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post"
-                            enctype="multipart/form-data">
-                            <?php for ($i = 0; $i < 5; $i++) : ?>
-                            <div class="mb-3">
-                                <label for="product_name_<?php echo $i; ?>"
-                                    class="form-label">Product Name <?php echo $i + 1; ?></label>
-                                <input type="text" class="form-control" id="product_name_<?php echo $i; ?>"
-                                    name="product_name_<?php echo $i; ?>">
+                        <form action="<?php echo htmlspecialchars($_SERVER["PHP_SELF"]); ?>" method="post" enctype="multipart/form-data" id="product-form">
+                            <div id="product-forms-container">
+                                <div class="product-form">
+                                    <div class="mb-3">
+                                        <label for="product_name" class="form-label">Product Name</label>
+                                        <input type="text" class="form-control" id="product_name" name="products[0][product_name]">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="product_code" class="form-label">Product Code</label>
+                                        <input type="text" class="form-control" id="product_code" name="products[0][product_code]">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="category_id" class="form-label">Category</label>
+                                        <select class="form-control" id="category_id" name="products[0][category_id]">
+                                            <option value="">Select Category</option>
+                                            <?php foreach ($categories as $category) : ?>
+                                                <option value="<?php echo $category['category_id']; ?>"><?php echo $category['category_name']; ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3 form-check">
+                                        <input type="checkbox" class="form-check-input" id="best_seller" name="products[0][best_seller]">
+                                        <label class="form-check-label" for="best_seller">Best Seller</label>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="product_image" class="form-label">Product Image</label>
+                                        <input type="file" class="form-control" id="product_image" name="products[0][product_image]">
+                                    </div>
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label for="product_code_<?php echo $i; ?>"
-                                    class="form-label">Product Code <?php echo $i + 1; ?></label>
-                                <input type="text" class="form-control" id="product_code_<?php echo $i; ?>"
-                                    name="product_code_<?php echo $i; ?>">
+                            <div class="text-center mb-3">
+                                <button type="button" class="btn btn-secondary" id="add-product-button">Add Another Product</button>
                             </div>
-                            <div class="mb-3">
-                                <label for="category_id_<?php echo $i; ?>"
-                                    class="form-label">Category <?php echo $i + 1; ?></label>
-                                <select class="form-control" id="category_id_<?php echo $i; ?>"
-                                    name="category_id_<?php echo $i; ?>">
-                                    <option value="">Select Category</option>
-                                    <?php foreach ($categories as $category) : ?>
-                                    <option
-                                        value="<?php echo $category['category_id']; ?>"><?php echo $category['category_name']; ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="mb-3 form-check">
-                                <input type="checkbox" class="form-check-input"
-                                    id="best_seller_<?php echo $i; ?>" name="best_seller_<?php echo $i; ?>">
-                                <label class="form-check-label"
-                                    for="best_seller_<?php echo $i; ?>">Best Seller</label>
-                            </div>
-                            <div class="mb-3">
-                                <label for="product_image_<?php echo $i; ?>"
-                                    class="form-label">Product Image <?php echo $i + 1; ?></label>
-                                <input type="file" class="form-control" id="product_image_<?php echo $i; ?>"
-                                    name="product_image_<?php echo $i; ?>">
-                            </div>
-                            <?php endfor; ?>
                             <div class="text-center mb-3">
                                 <button type="submit" class="btn btn-primary">Add Products</button>
                             </div>
@@ -198,7 +167,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </div>
     </div>
     <!-- Bootstrap JS -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        let productIndex = 1;
+
+        document.getElementById('add-product-button').addEventListener('click', function () {
+            const productForm = document.querySelector('.product-form');
+            const newProductForm = productForm.cloneNode(true);
+            const inputs = newProductForm.querySelectorAll('input, select');
+
+            inputs.forEach(input => {
+                const name = input.name.replace(/\d+/, productIndex);
+                input.name = name;
+                input.id = name;
+                if (input.type !== 'checkbox' && input.type !== 'file') {
+                    input.value = '';
+                } else if (input.type === 'checkbox') {
+                    input.checked = false;
+                }
+            });
+
+            newProductForm.querySelector('.form-check-label').setAttribute('for', 'best_seller_' + productIndex);
+            newProductForm.querySelector('.form-check-input').id = 'best_seller_' + productIndex;
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.classList.add('btn', 'btn-danger', 'remove-button');
+            removeButton.textContent = 'Remove Product';
+            removeButton.addEventListener('click', function () {
+                this.closest('.product-form').remove();
+            });
+
+            newProductForm.appendChild(removeButton);
+
+            document.getElementById('product-forms-container').appendChild(newProductForm);
+            productIndex++;
+        });
+    </script>
 </body>
 
 </html>
